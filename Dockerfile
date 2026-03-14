@@ -5,7 +5,7 @@ WORKDIR /app
 
 # 只复制依赖文件，利用 Docker 层缓存
 COPY package*.json ./
-RUN npm ci --omit=dev
+RUN npm install --omit=dev --no-audit --no-fund
 
 # ---- Runtime Stage ----
 FROM node:20-alpine
