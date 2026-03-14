@@ -20,6 +20,8 @@ const MemoSchema = new Schema({
   reminder:  { type: String, default: '' },
   note:      { type: String, default: '' },
   done:      { type: Boolean, default: false },
+  color:     { type: String, default: '' },
+  date:      { type: String, default: '' },
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now }
 })
@@ -34,11 +36,9 @@ const ShieldSchema = new Schema({
 
 // ---- 生理期 ----
 const PeriodSchema = new Schema({
-  roomId:       { type: String, required: true, unique: true },
-  cycleLength:  { type: Number, default: 28 },
-  periodLength: { type: Number, default: 5 },
-  records:      { type: Array, default: [] },
-  updatedAt:    { type: Date, default: Date.now }
+  roomId:    { type: String, required: true, unique: true },
+  data:      { type: Schema.Types.Mixed, default: {} },  // 存储完整的 periodData 对象
+  updatedAt: { type: Date, default: Date.now }
 })
 
 // ---- 呼唤记录 ----

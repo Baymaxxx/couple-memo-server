@@ -22,63 +22,79 @@ router.post('/sync', async (req, res) => {
           exists = await Room.findOne({ code })
         } while (exists)
         const room = await Room.create({ code, settings: data.settings || {}, members: 1 })
-        return res.json({ success: true, roomId: room._id, code })
+        return res.json({ success: true, roomId: room._id.toString(), code })
       }
 
       case 'joinRoom': {
+        if (!data.code) return res.json({ success: false, error: '缺少房间码' })
         const room = await Room.findOne({ code: data.code.toUpperCase() })
         if (!room) return res.json({ success: false, error: '房间码不存在' })
         room.members = 2
         await room.save()
-        return res.json({ success: true, roomId: room._id, settings: room.settings })
+        return res.json({ success: true, roomId: room._id.toString(), settings: room.settings })
       }
 
       case 'getRoom': {
+        if (!data.roomId) return res.json({ success: false, error: '缺少 roomId' })
         const room = await Room.findById(data.roomId)
         if (!room) return res.json({ success: false, error: '房间不存在' })
-        return res.json({ success: true, room: { _id: room._id, code: room.code, settings: room.settings, members: room.members } })
+        return res.json({ success: true, room: { _id: room._id.toString(), code: room.code, settings: room.settings, members: room.members } })
       }
 
       // ========== 设置 ==========
       case 'saveSettings': {
+        if (!data.roomId) return res.json({ success: false, error: '缺少 roomId' })
         await Room.findByIdAndUpdate(data.roomId, { settings: data.settings })
         return res.json({ success: true })
       }
 
       case 'loadSettings': {
+        if (!data.roomId) return res.json({ success: false, error: '缺少 roomId' })
         const room = await Room.findById(data.roomId)
         return res.json({ success: true, settings: room ? room.settings : null })
       }
 
       // ========== 备忘录 ==========
       case 'addMemo': {
-        const memo = data.memo
+        // cloud.js 传入: { roomId, memo: { localId, content, category, ... } }
+        const memo = data.memo || {}
+        const localId = memo.localId || memo.id
+        if (!data.roomId || !localId) {
+          return res.json({ success: false, error: '缺少 roomId 或 localId' })
+        }
         const doc = await Memo.findOneAndUpdate(
-          { roomId: data.roomId, localId: memo.id || memo.localId },
+          { roomId: data.roomId, localId },
           {
-            localId:   memo.id || memo.localId,
+            localId,
             roomId:    data.roomId,
-            content:   memo.content || '',
-            category:  memo.category || 'daily',
-            priority:  memo.priority || 'medium',
-            assignee:  memo.assignee || 'both',
-            reminder:  memo.reminder || '',
-            note:      memo.note || '',
-            done:      memo.done || false,
+            content:   memo.content   || '',
+            category:  memo.category  || 'daily',
+            priority:  memo.priority  || 'medium',
+            assignee:  memo.assignee  || 'both',
+            reminder:  memo.reminder  || '',
+            note:      memo.note      || '',
+            done:      memo.done      || false,
+            color:     memo.color     || '',
+            date:      memo.date      || '',
             updatedAt: new Date()
           },
           { upsert: true, new: true, setDefaultsOnInsert: true }
         )
-        return res.json({ success: true, _id: doc._id })
+        return res.json({ success: true, _id: doc._id.toString() })
       }
 
       case 'loadMemos': {
+        if (!data.roomId) return res.json({ success: false, error: '缺少 roomId' })
         const memos = await Memo.find({ roomId: data.roomId }).sort({ createdAt: -1 }).limit(200)
         return res.json({ success: true, memos })
       }
 
       case 'updateMemo': {
-        const updates = { ...data.updates, updatedAt: new Date() }
+        // cloud.js 传入: { roomId, localId, updates: { content, color, ... } }
+        if (!data.roomId || !data.localId) {
+          return res.json({ success: false, error: '缺少 roomId 或 localId' })
+        }
+        const updates = { ...(data.updates || {}), updatedAt: new Date() }
         delete updates._id
         delete updates.id
         delete updates.localId
@@ -92,12 +108,17 @@ router.post('/sync', async (req, res) => {
       }
 
       case 'deleteMemo': {
+        // cloud.js 传入: { roomId, localId }
+        if (!data.roomId || !data.localId) {
+          return res.json({ success: false, error: '缺少 roomId 或 localId' })
+        }
         await Memo.deleteOne({ roomId: data.roomId, localId: data.localId })
         return res.json({ success: true })
       }
 
       // ========== 屏蔽 ==========
       case 'setShield': {
+        if (!data.roomId) return res.json({ success: false, error: '缺少 roomId' })
         await Shield.findOneAndUpdate(
           { roomId: data.roomId },
           { active: data.active, since: data.active ? new Date() : null },
@@ -107,34 +128,39 @@ router.post('/sync', async (req, res) => {
       }
 
       case 'getShield': {
+        if (!data.roomId) return res.json({ success: false, error: '缺少 roomId' })
         const shield = await Shield.findOne({ roomId: data.roomId })
         return res.json({ success: true, shield: shield || { active: false } })
       }
 
       // ========== 生理期 ==========
       case 'savePeriod': {
-        const payload = { ...data.periodData, updatedAt: new Date() }
-        delete payload._id
+        if (!data.roomId) return res.json({ success: false, error: '缺少 roomId' })
+        const periodPayload = { ...(data.periodData || {}) }
+        delete periodPayload._id
         await Period.findOneAndUpdate(
           { roomId: data.roomId },
-          { ...payload, roomId: data.roomId },
+          { $set: { data: periodPayload, updatedAt: new Date(), roomId: data.roomId } },
           { upsert: true }
         )
         return res.json({ success: true })
       }
 
       case 'getPeriod': {
+        if (!data.roomId) return res.json({ success: false, error: '缺少 roomId' })
         const period = await Period.findOne({ roomId: data.roomId })
-        return res.json({ success: true, periodData: period || null })
+        return res.json({ success: true, periodData: period ? period.data : null })
       }
 
       // ========== 呼唤 ==========
       case 'addSummon': {
+        if (!data.roomId) return res.json({ success: false, error: '缺少 roomId' })
         await Summon.create({ roomId: data.roomId, from: data.from })
         return res.json({ success: true })
       }
 
       case 'getSummons': {
+        if (!data.roomId) return res.json({ success: false, error: '缺少 roomId' })
         const logs = await Summon.find({ roomId: data.roomId }).sort({ at: -1 }).limit(20)
         return res.json({ success: true, logs })
       }
