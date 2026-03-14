@@ -2,9 +2,6 @@ FROM node:20-alpine
 
 WORKDIR /app
 
-# 升级 npm 避免 npm10 的 bug
-RUN npm install -g npm@latest
-
 # 安全：以非 root 用户运行
 RUN addgroup -S appgroup && adduser -S appuser -G appgroup
 
