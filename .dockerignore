@@ -4,3 +4,4 @@ node_modules
 .gitignore
 ecosystem.config.js
 *.md
+package-lock.json

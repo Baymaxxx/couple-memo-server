@@ -6,10 +6,10 @@ WORKDIR /app
 RUN addgroup -S appgroup && adduser -S appuser -G appgroup
 
 # 复制依赖文件
-COPY package*.json ./
+COPY package.json ./
 
-# 安装生产依赖
-RUN npm install --omit=dev --no-audit --no-fund
+# 使用公网 npm registry 安装生产依赖（忽略 lock 文件避免内网镜像问题）
+RUN npm install --omit=dev --no-audit --no-fund --registry https://registry.npmjs.org
 
 # 复制源码
 COPY src ./src
